@@ -23,6 +23,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#include <icp101xx.h>
+
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -35,8 +37,14 @@
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+// Sensor is an ICP101xx object
+ICP101xx sensor;
+
 void setup() {
+  sensor.begin();
   Serial.begin(9600);
+
+  sensor.measureStart(sensor.VERY_ACCURATE);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
@@ -44,39 +52,60 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
-  // Show initial display buffer contents on the screen --
-  // the library initializes this with an Adafruit splash screen.
+  // Adafruit splash screen.
   display.display();
   delay(2000); // Pause for 2 seconds
 
   // Clear the buffer
   display.clearDisplay();
-
-  // Show the display buffer on the screen. You MUST call display() after
-  // drawing commands to make them visible on screen!
   display.display();
-  delay(2000);
-  // display.display() is NOT necessary after every single drawing command,
-  // unless that's what you want...rather, you can batch up a bunch of
-  // drawing operations and then update the screen all at once by calling
-  // display.display(). These examples demonstrate both approaches...
-
-  displaypressure();
+  delay(100);
 
 }
 
 void loop() {
-}
+  //Average pressure & temperature readings over 10 values
+  float pressureSum = 0;
+  float pressure = 0;
+  
+  float temperatureSum = 0;
+  float temperature = 0;
+  
+  for (int i=0; i<10; i++) {
+      // When the measurement is complete, dataReady() will return true.
+      if (sensor.dataReady()) {
+        // Read and output measured temperature in Celcius and pressure in Pascal.
+        Serial.print(sensor.getTemperatureC());
+        Serial.print(",");
+        Serial.println(sensor.getPressurePa());
+        temperature = sensor.getTemperatureC();
+        pressure = sensor.getPressurePa();
 
-void displaypressure(void) {
+        // Start the next measurement cycle.
+        sensor.measureStart(sensor.VERY_ACCURATE);
+      }
+      pressureSum = pressureSum + pressure;
+      temperatureSum = temperatureSum + temperature;
+      delay(100);
+  }
+
+  float pressureAvg = pressureSum/10;
+  float temperatureAvg = temperatureSum/10;
+
   display.clearDisplay();
-
   display.setTextSize(2);             // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);        // Draw white text
   display.setCursor(0,0);             // Start at top-left corner
   display.println(F("Pressure:"));
-  display.println(F("<Pressure>"));
-
+  display.println(pressureAvg);
+  display.setTextSize(1);
+  display.println();
+  display.setTextSize(2);
+  display.print(temperatureAvg);
+  display.println(F("'C"));
   display.display();
-  delay(2000);
+
+  delay(100);
+  
 }
+
